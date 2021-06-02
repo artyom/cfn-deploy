@@ -10,11 +10,13 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	"gopkg.in/yaml.v2"
 )
 
 func main() {
@@ -58,6 +60,25 @@ func run(ctx context.Context, args runArgs) error {
 	if err != nil {
 		return err
 	}
+	if len(args.Tags) == 0 && bytes.Contains(body, []byte("Metadata:")) && bytes.Contains(body, []byte("Tags:")) {
+		tpl := struct {
+			Metadata struct {
+				Tags map[string]string `yaml:"Tags"`
+			} `yaml:"Metadata"`
+		}{}
+		if yaml.Unmarshal(body, &tpl) == nil {
+			var once sync.Once
+			for k, v := range tpl.Metadata.Tags {
+				if k == "" || v == "" {
+					continue
+				}
+				once.Do(func() { log.Println("Tags inferred from template metadata:") })
+				log.Printf("  %s = %s\n", k, v)
+				args.Tags = append(args.Tags, types.Tag{Key: aws.String(k), Value: aws.String(v)})
+			}
+		}
+	}
+
 	var capabilities []types.Capability
 	if bytes.Contains(body, []byte("AWS::IAM::")) {
 		capabilities = append(capabilities, types.CapabilityCapabilityNamedIam)
