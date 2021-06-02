@@ -37,6 +37,9 @@ type runArgs struct {
 }
 
 func run(ctx context.Context, args runArgs) error {
+	if args.Name == "" {
+		return errors.New("stack name must be set")
+	}
 	body, err := os.ReadFile(args.File)
 	if err != nil {
 		return err
@@ -44,9 +47,6 @@ func run(ctx context.Context, args runArgs) error {
 	var capabilities []types.Capability
 	if bytes.Contains(body, []byte("AWS::IAM::")) {
 		capabilities = append(capabilities, types.CapabilityCapabilityNamedIam)
-	}
-	if args.Name == "" {
-		return errors.New("stack name must be set")
 	}
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
