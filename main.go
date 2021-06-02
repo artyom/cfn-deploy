@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -22,6 +23,18 @@ func main() {
 	flag.StringVar(&args.File, "f", args.File, "template `file`")
 	flag.StringVar(&args.Name, "n", args.Name, "stack `name`")
 	flag.BoolVar(&args.Create, "c", args.Create, "create stack instead of updating")
+	flag.Func("t", "add a tag in `name=value` format; can be used multile times", func(s string) error {
+		i := strings.IndexRune(s, '=')
+		if i == -1 {
+			return errors.New("tag must be in 'name=value' format")
+		}
+		name, value := strings.TrimSpace(s[:i]), strings.TrimSpace(s[i+1:])
+		if name == "" || value == "" {
+			return errors.New("both tag name and value must be set")
+		}
+		args.Tags = append(args.Tags, types.Tag{Key: &name, Value: &value})
+		return nil
+	})
 	flag.Parse()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
@@ -34,6 +47,7 @@ type runArgs struct {
 	File   string
 	Name   string
 	Create bool
+	Tags   []types.Tag
 }
 
 func run(ctx context.Context, args runArgs) error {
@@ -59,6 +73,7 @@ func run(ctx context.Context, args runArgs) error {
 			TemplateBody: aws.String(string(body)),
 			OnFailure:    types.OnFailureDelete,
 			Capabilities: capabilities,
+			Tags:         args.Tags,
 		})
 		return err
 	}
@@ -66,6 +81,7 @@ func run(ctx context.Context, args runArgs) error {
 		StackName:    &args.Name,
 		TemplateBody: aws.String(string(body)),
 		Capabilities: capabilities,
+		Tags:         args.Tags,
 	})
 	return err
 }
